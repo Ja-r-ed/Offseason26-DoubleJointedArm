@@ -45,9 +45,9 @@ class SubShoulder : public frc2::SubsystemBase {
   ICSparkFlex _shoulderMotor{canid::SHOULDER};
   rev::spark::SparkFlexConfig _shoulderMotorConfig;
 
-  static constexpr double SHOULDER_P = 5.0;
-  static constexpr double SHOULDER_I = 5.0;
-  static constexpr double SHOULDER_D = 5.0;
+  static constexpr double SHOULDER_P = 1.0;
+  static constexpr double SHOULDER_I = 0.0;
+  static constexpr double SHOULDER_D = 0.0;
   static constexpr double SHOULDER_GEARING = 55.8;
   static constexpr units::degree_t SHOULDER_MAX_ANGLE = 120_deg;
   static constexpr units::degree_t SHOULDER_MIN_ANGLE = -20_deg;
