@@ -12,6 +12,12 @@
 #include <frc/system/plant/LinearSystemId.h>
 #include <frc2/command/Commands.h>
 
+#include <frc/smartdashboard/SmartDashboard.h>
+#include <frc/smartdashboard/Mechanism2d.h>
+#include <frc/smartdashboard/MechanismLigament2d.h>
+#include <frc/smartdashboard/MechanismRoot2d.h>
+#include <frc/util/Color.h>
+
 #include "Constants.h"
 #include "rev/config/SparkFlexConfig.h"
 #include "rev/config/SparkFlexConfigAccessor.h"
@@ -64,4 +70,9 @@ class SubShoulder : public frc2::SubsystemBase {
   frc::sim::SingleJointedArmSim _shoulderSim{_shoulderArmSystem, SHOULDER_MOTOR_MODEL,
     SHOULDER_GEARING, SHOULDER_ARM_LENGTH, SHOULDER_MIN_ANGLE, SHOULDER_MAX_ANGLE, false,
     SHOULDER_STARTING_ANGLE};
+
+  // Mech visualisation
+  frc::Mechanism2d _shoulderMechanism{3.0, 3.0};
+  frc::MechanismRoot2d* _shoulderMechanismRoot = nullptr;
+  frc::MechanismLigament2d* _shoulderLigament = nullptr;
 };

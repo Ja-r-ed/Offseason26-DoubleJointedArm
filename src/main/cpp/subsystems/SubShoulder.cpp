@@ -7,8 +7,6 @@
 #include <units/current.h>
 #include <utilities/Logger.h>
 
-#include "utilities/RobotVisualisation.h"
-
 SubShoulder::SubShoulder() {
   _shoulderMotorConfig.SmartCurrentLimit(60);
   _shoulderMotorConfig.softLimit.ForwardSoftLimit(SHOULDER_MAX_ANGLE.value());
@@ -20,18 +18,32 @@ SubShoulder::SubShoulder() {
   _shoulderMotorConfig.closedLoop.MinOutput(-1);
   _shoulderMotor.OverwriteConfig(_shoulderMotorConfig);
 
-  Logger::Log("Deploy/DeployMotor", &_shoulderMotor);
+  Logger::Log("Shoulder/ShoulderMotor", &_shoulderMotor);
+
+  _shoulderMechanismRoot = _shoulderMechanism.GetRoot("shoulder_root", 1.5, 1.5);
+
+  _shoulderLigament = _shoulderMechanismRoot->Append<frc::MechanismLigament2d>(
+    "shoulder",
+    SHOULDER_ARM_LENGTH.value(),
+    SHOULDER_STARTING_ANGLE,
+    6.0,
+    frc::Color8Bit(0, 0, 255)
+  );
+
+  Logger::Log("Shoulder Mech", &_shoulderMechanism);
 }
 
 // This method will be called once per scheduler run
 void SubShoulder::Periodic() {
-    RobotVisualisation::GetInstance()._deployLigament->SetAngle(_shoulderMotor.GetPosition());
 }
 
 void SubShoulder::SimulationPeriodic() {
     _shoulderSim.SetInputVoltage(_shoulderMotor.CalcSimVoltage());
     _shoulderSim.Update(20_ms);
     _shoulderMotor.IterateSim(_shoulderSim.GetVelocity(), _shoulderSim.GetAngle());
+    _shoulderLigament->SetAngle(
+        units::degree_t(_shoulderSim.GetAngle())
+    );
 }
 
 frc2::CommandPtr SubShoulder::SetPositionTarget(units::degree_t target) {
