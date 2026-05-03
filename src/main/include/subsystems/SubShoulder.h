@@ -43,6 +43,7 @@ class SubShoulder : public frc2::SubsystemBase {
   units::degree_t GetPositionTarget();
   units::degree_t GetPosition();
   units::degrees_per_second_t GetVelocity();
+  frc::MechanismLigament2d* GetShoulderLigament();
 
   //Bool
   bool ShoulderIsAtTarget();

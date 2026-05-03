@@ -16,6 +16,8 @@ RobotContainer::RobotContainer() {
 void RobotContainer::ConfigureBindings() {
   _driverController.A().OnTrue(SubShoulder::GetInstance().SetPositionTarget(0_deg));
   _driverController.B().OnTrue(SubShoulder::GetInstance().SetPositionTarget(90_deg));
+  _driverController.X().OnTrue(SubElbow::GetInstance().SetPositionTarget(0_deg));
+  _driverController.Y().OnTrue(SubElbow::GetInstance().SetPositionTarget(90_deg));
 }
 
 frc2::CommandPtr RobotContainer::GetAutonomousCommand() {

@@ -65,3 +65,7 @@ units::degrees_per_second_t SubShoulder::GetVelocity() {
 bool SubShoulder::ShoulderIsAtTarget() {
     return units::math::abs(GetPositionTarget() - GetPosition()) < SHOULDER_TOLERANCE;
 }
+
+frc::MechanismLigament2d* SubShoulder::GetShoulderLigament() {
+    return _shoulderLigament;
+}
