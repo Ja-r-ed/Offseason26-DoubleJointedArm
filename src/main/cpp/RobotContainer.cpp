@@ -6,18 +6,17 @@
 
 #include <frc2/command/Commands.h>
 
-#include "subsystems/SubElbow.h"
-#include "subsystems/SubShoulder.h"
+#include "subsystems/SubArm.h"
 
 RobotContainer::RobotContainer() {
   ConfigureBindings();
 }
 
 void RobotContainer::ConfigureBindings() {
-  _driverController.A().OnTrue(SubShoulder::GetInstance().SetPositionTarget(0_deg));
-  _driverController.B().OnTrue(SubShoulder::GetInstance().SetPositionTarget(90_deg));
-  _driverController.X().OnTrue(SubElbow::GetInstance().SetPositionTarget(0_deg));
-  _driverController.Y().OnTrue(SubElbow::GetInstance().SetPositionTarget(90_deg));
+  _driverController.A().OnTrue(SubArm::GetInstance().SetShoulderPositionTarget(0_deg));
+  _driverController.B().OnTrue(SubArm::GetInstance().SetShoulderPositionTarget(90_deg));
+  _driverController.X().OnTrue(SubArm::GetInstance().SetElbowPositionTarget(0_deg));
+  _driverController.Y().OnTrue(SubArm::GetInstance().SetElbowPositionTarget(90_deg));
 }
 
 frc2::CommandPtr RobotContainer::GetAutonomousCommand() {
