@@ -7,16 +7,16 @@
 #include <frc2/command/Commands.h>
 
 #include "subsystems/SubArm.h"
+#include "commands/ArmCommands.h"
 
 RobotContainer::RobotContainer() {
   ConfigureBindings();
 }
 
 void RobotContainer::ConfigureBindings() {
-  _driverController.A().OnTrue(SubArm::GetInstance().SetShoulderPositionTarget(0_deg));
-  _driverController.B().OnTrue(SubArm::GetInstance().SetShoulderPositionTarget(90_deg));
-  _driverController.X().OnTrue(SubArm::GetInstance().SetElbowPositionTarget(0_deg));
-  _driverController.Y().OnTrue(SubArm::GetInstance().SetElbowPositionTarget(90_deg));
+  _driverController.A().OnTrue(cmd::SetArmsTargetsForPosition({0.5_m, 0.5_m}));
+  _driverController.B().OnTrue(cmd::SetArmsTargetsForPosition({0.5_m, -0.5_m}));
+
 }
 
 frc2::CommandPtr RobotContainer::GetAutonomousCommand() {

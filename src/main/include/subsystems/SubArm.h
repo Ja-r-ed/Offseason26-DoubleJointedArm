@@ -53,6 +53,9 @@ class SubArm : public frc2::SubsystemBase {
   bool ShoulderIsAtTarget();
   bool ElbowIsAtTarget();
 
+  static constexpr units::meter_t SHOULDER_ARM_LENGTH = 0.5_m;
+  static constexpr units::meter_t ELBOW_ARM_LENGTH = 0.5_m;
+
  private:
   ICSparkFlex _shoulderMotor{canid::SHOULDER};
   rev::spark::SparkFlexConfig _shoulderMotorConfig;
@@ -60,7 +63,7 @@ class SubArm : public frc2::SubsystemBase {
   ICSparkFlex _elbowMotor{canid::ELBOW};
   rev::spark::SparkFlexConfig _elbowMotorConfig;
 
-  static constexpr double SHOULDER_P = 0.0;
+  static constexpr double SHOULDER_P = 3.0;
   static constexpr double SHOULDER_I = 0.0;
   static constexpr double SHOULDER_D = 0.0;
   static constexpr double SHOULDER_GEARING = 55.8;
@@ -69,7 +72,7 @@ class SubArm : public frc2::SubsystemBase {
   static constexpr units::degree_t SHOULDER_STARTING_ANGLE = 0_deg;
   static constexpr units::degree_t SHOULDER_TOLERANCE = 1_deg;
 
-  static constexpr double ELBOW_P = 0.0;
+  static constexpr double ELBOW_P = 3.0;
   static constexpr double ELBOW_I = 0.0;
   static constexpr double ELBOW_D = 0.0;
   static constexpr double ELBOW_GEARING = 55.8;
@@ -82,7 +85,6 @@ class SubArm : public frc2::SubsystemBase {
   static constexpr units::degree_t SHOULDER_START_ANGLE = 0_deg;
   static constexpr units::kilogram_square_meter_t SHOULDER_MOI = 0.5_kg_sq_m;
   static constexpr frc::DCMotor SHOULDER_MOTOR_MODEL = frc::DCMotor::NeoVortex();
-  static constexpr units::meter_t SHOULDER_ARM_LENGTH = 0.5_m;
   frc::LinearSystem<2, 1, 2> _shoulderArmSystem =
     frc::LinearSystemId::SingleJointedArmSystem(SHOULDER_MOTOR_MODEL, SHOULDER_MOI, SHOULDER_GEARING);
   frc::sim::SingleJointedArmSim _shoulderSim{_shoulderArmSystem, SHOULDER_MOTOR_MODEL,
@@ -92,7 +94,6 @@ class SubArm : public frc2::SubsystemBase {
   static constexpr units::degree_t ELBOW_START_ANGLE = 0_deg;
   static constexpr units::kilogram_square_meter_t ELBOW_MOI = 0.5_kg_sq_m;
   static constexpr frc::DCMotor ELBOW_MOTOR_MODEL = frc::DCMotor::NeoVortex();
-  static constexpr units::meter_t ELBOW_ARM_LENGTH = 0.5_m;
   frc::LinearSystem<2, 1, 2> _elbowArmSystem =
     frc::LinearSystemId::SingleJointedArmSystem(ELBOW_MOTOR_MODEL, ELBOW_MOI, ELBOW_GEARING);
   frc::sim::SingleJointedArmSim _elbowSim{_elbowArmSystem, ELBOW_MOTOR_MODEL,
