@@ -9,8 +9,8 @@
 
 SubArm::SubArm() {
   _shoulderMotorConfig.SmartCurrentLimit(60);
-  _shoulderMotorConfig.softLimit.ForwardSoftLimit(SHOULDER_MAX_ANGLE.value());
-  _shoulderMotorConfig.softLimit.ReverseSoftLimit(SHOULDER_MIN_ANGLE.value());
+  _shoulderMotorConfig.softLimit.ForwardSoftLimit(SHOULDER_MAX_ANGLE.value() / 360.0);
+  _shoulderMotorConfig.softLimit.ReverseSoftLimit(SHOULDER_MIN_ANGLE.value() / 360.0);
   _shoulderMotorConfig.encoder.PositionConversionFactor(1.0 / SHOULDER_GEARING);
   _shoulderMotorConfig.encoder.VelocityConversionFactor(1.0 / SHOULDER_GEARING);
   _shoulderMotorConfig.closedLoop.Pid(SHOULDER_P, SHOULDER_I, SHOULDER_D);
@@ -19,8 +19,8 @@ SubArm::SubArm() {
   _shoulderMotor.OverwriteConfig(_shoulderMotorConfig);
 
   _elbowMotorConfig.SmartCurrentLimit(60);
-  _elbowMotorConfig.softLimit.ForwardSoftLimit(ELBOW_MAX_ANGLE.value());
-  _elbowMotorConfig.softLimit.ReverseSoftLimit(ELBOW_MIN_ANGLE.value());
+  _elbowMotorConfig.softLimit.ForwardSoftLimit(ELBOW_MAX_ANGLE.value() / 360.0);
+  _elbowMotorConfig.softLimit.ReverseSoftLimit(ELBOW_MIN_ANGLE.value() / 360.0);
   _elbowMotorConfig.encoder.PositionConversionFactor(1.0 / ELBOW_GEARING);
   _elbowMotorConfig.encoder.VelocityConversionFactor(1.0 / ELBOW_GEARING);
   _elbowMotorConfig.closedLoop.Pid(ELBOW_P, ELBOW_I, ELBOW_D);
@@ -71,9 +71,11 @@ void SubArm::SimulationPeriodic() {
     );
 }
 
-frc2::CommandPtr SubArm::SetShoulderAndElbowPositionTarget(units::degree_t shoulderTarget, units::degree_t elbowTarget) {
-    return RunOnce([this, shoulderTarget, elbowTarget]
-                   {_shoulderMotor.SetPositionTarget(shoulderTarget); _elbowMotor.SetPositionTarget(elbowTarget); });
+frc2::CommandPtr SubArm::SetShoulderAndElbowPositionTargets(units::degree_t shoulderTarget, units::degree_t elbowTarget, units::volt_t shoulderFF, units::volt_t elbowFF) {
+    return RunOnce([this, shoulderTarget, elbowTarget, shoulderFF, elbowFF] {
+        _shoulderMotor.SetPositionTarget(shoulderTarget, shoulderFF);
+        _elbowMotor.SetPositionTarget(elbowTarget, elbowFF);
+    });
 }
 
 units::degree_t SubArm::GetShoulderPositionTarget() {

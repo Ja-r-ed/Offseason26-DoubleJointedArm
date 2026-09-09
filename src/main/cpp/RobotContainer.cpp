@@ -14,9 +14,9 @@ RobotContainer::RobotContainer() {
 }
 
 void RobotContainer::ConfigureBindings() {
-  _driverController.A().OnTrue(cmd::SetArmsTargetsForPosition({0.5_m, 0.5_m}));
-  _driverController.B().OnTrue(cmd::SetArmsTargetsForPosition({0.5_m, -0.5_m}));
-
+  _driverController.A().OnTrue(cmd::SetArmsTargetsForPosition({0.7_m, 0.7_m}));
+  _driverController.B().OnTrue(cmd::SetArmsTargetsForPosition({0.7_m, -0.7_m}));
+  _driverController.X().OnTrue(cmd::SetArmsTargetsForPosition({0.75_m, 0.0_m}));
 }
 
 frc2::CommandPtr RobotContainer::GetAutonomousCommand() {
