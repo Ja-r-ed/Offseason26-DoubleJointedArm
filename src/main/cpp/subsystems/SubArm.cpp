@@ -71,8 +71,9 @@ void SubArm::SimulationPeriodic() {
     );
 }
 
-frc2::CommandPtr SubArm::SetShoulderPositionTarget(units::degree_t target) {
-    return RunOnce([this, target] {_shoulderMotor.SetPositionTarget(target);});
+frc2::CommandPtr SubArm::SetShoulderAndElbowPositionTarget(units::degree_t shoulderTarget, units::degree_t elbowTarget) {
+    return RunOnce([this, shoulderTarget, elbowTarget]
+                   {_shoulderMotor.SetPositionTarget(shoulderTarget); _elbowMotor.SetPositionTarget(elbowTarget); });
 }
 
 units::degree_t SubArm::GetShoulderPositionTarget() {
@@ -89,10 +90,6 @@ units::degrees_per_second_t SubArm::GetShoulderVelocity() {
 
 bool SubArm::ShoulderIsAtTarget() {
     return units::math::abs(GetShoulderPositionTarget() - GetShoulderPosition()) < SHOULDER_TOLERANCE;
-}
-
-frc2::CommandPtr SubArm::SetElbowPositionTarget(units::degree_t target) {
-    return RunOnce([this, target] {_elbowMotor.SetPositionTarget(target);});
 }
 
 units::degree_t SubArm::GetElbowPositionTarget() {

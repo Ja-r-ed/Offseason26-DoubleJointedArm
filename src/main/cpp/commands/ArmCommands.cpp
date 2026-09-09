@@ -129,8 +129,7 @@ namespace cmd {
     }
 
     frc2::CommandPtr SetArmsTarget(std::pair<units::degree_t, units::degree_t> angles) {
-        return SubArm::GetInstance().SetShoulderPositionTarget(angles.first)
-        .AlongWith(SubArm::GetInstance().SetElbowPositionTarget(angles.second));
+        return SubArm::GetInstance().SetShoulderAndElbowPositionTarget(angles.first, angles.second);
     }
 
     frc2::CommandPtr SetArmsTargetsForPosition(std::pair<units::meter_t, units::meter_t> position) {

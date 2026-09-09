@@ -37,9 +37,8 @@ class SubArm : public frc2::SubsystemBase {
   void SimulationPeriodic() override;
 
   //CommandPtrs
-  frc2::CommandPtr SetShoulderPositionTarget(units::degree_t target);
-  frc2::CommandPtr SetElbowPositionTarget(units::degree_t target);
-
+  frc2::CommandPtr SetShoulderAndElbowPositionTarget(units::degree_t shoulderTarget, units::degree_t elbowTarget);
+  
   //Getters
   units::degree_t GetShoulderPositionTarget();
   units::degree_t GetShoulderPosition();
@@ -48,6 +47,7 @@ class SubArm : public frc2::SubsystemBase {
   units::degree_t GetElbowPosition();
   units::degrees_per_second_t GetElbowVelocity();
   units::degree_t GetRelativeElbowPosition();
+ 
 
   //Bool
   bool ShoulderIsAtTarget();
