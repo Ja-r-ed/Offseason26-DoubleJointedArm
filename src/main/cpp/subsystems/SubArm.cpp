@@ -53,6 +53,28 @@ SubArm::SubArm() {
 
 // This method will be called once per scheduler run
 void SubArm::Periodic() {
+  // Estimate each joint's angular acceleration as a low-pass filtered derivative of
+  // the measured encoder velocity (fixed 20 ms scheduler period). The first sample
+  // just seeds the previous-velocity state so there is no startup spike.
+  const units::degrees_per_second_t shoulderVelocity = GetShoulderVelocity();
+  if (!_shoulderAccelInitialized) {
+    _lastShoulderVelocity = shoulderVelocity;
+    _shoulderAccelInitialized = true;
+  } else {
+    const double rawShoulderAccel = (shoulderVelocity - _lastShoulderVelocity).value() / 0.020;
+    _shoulderAccel = units::degrees_per_second_squared_t{_shoulderAccelFilter.Calculate(rawShoulderAccel)};
+    _lastShoulderVelocity = shoulderVelocity;
+  }
+
+  const units::degrees_per_second_t elbowVelocity = GetElbowVelocity();
+  if (!_elbowAccelInitialized) {
+    _lastElbowVelocity = elbowVelocity;
+    _elbowAccelInitialized = true;
+  } else {
+    const double rawElbowAccel = (elbowVelocity - _lastElbowVelocity).value() / 0.020;
+    _elbowAccel = units::degrees_per_second_squared_t{_elbowAccelFilter.Calculate(rawElbowAccel)};
+    _lastElbowVelocity = elbowVelocity;
+  }
 }
 
 void SubArm::SimulationPeriodic() {
@@ -71,11 +93,12 @@ void SubArm::SimulationPeriodic() {
     );
 }
 
-frc2::CommandPtr SubArm::SetShoulderAndElbowPositionTargets(units::degree_t shoulderTarget, units::degree_t elbowTarget, units::volt_t shoulderFF, units::volt_t elbowFF) {
-    return RunOnce([this, shoulderTarget, elbowTarget, shoulderFF, elbowFF] {
-        _shoulderMotor.SetPositionTarget(shoulderTarget, shoulderFF);
-        _elbowMotor.SetPositionTarget(elbowTarget, elbowFF);
-    });
+void SubArm::SetShoulderPositionTarget(units::degree_t shoulderTarget, units::volt_t shoulderFF) {
+    _shoulderMotor.SetPositionTarget(shoulderTarget, shoulderFF);
+}
+
+void SubArm::SetElbowPositionTarget(units::degree_t elbowTarget, units::volt_t elbowFF) {
+    _elbowMotor.SetPositionTarget(elbowTarget, elbowFF);
 }
 
 units::degree_t SubArm::GetShoulderPositionTarget() {
@@ -112,4 +135,12 @@ bool SubArm::ElbowIsAtTarget() {
 
 units::degree_t SubArm::GetRelativeElbowPosition() {
     return GetElbowPosition() + GetShoulderPosition();
+}
+
+units::degrees_per_second_squared_t SubArm::GetShoulderAcceleration() {
+    return _shoulderAccel;
+}
+
+units::degrees_per_second_squared_t SubArm::GetElbowAcceleration() {
+    return _elbowAccel;
 }

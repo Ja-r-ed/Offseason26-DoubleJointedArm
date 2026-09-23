@@ -2,6 +2,7 @@
 #include "subsystems/SubArm.h"
 #include "utilities/Logger.h"
 
+#include <frc/system/plant/DCMotor.h>
 #include <cmath>
 
 namespace cmd {
@@ -130,27 +131,30 @@ namespace cmd {
     }
 
     frc2::CommandPtr SetArmsTargetsForPosition(std::pair<units::meter_t, units::meter_t> position) {
-        // Single command that requires SubArm. Runs once at runtime: computes the IK angles
-        // and feedforward from the *current* arm state and sets both motor targets together.
-        // Keep all calculation inside the RunOnce so it happens at runtime, and use one
-        // CommandPtr so there is no parallel/subsystem conflict.
-        std::pair<units::degree_t, units::degree_t> angles = [position]{
-            return GetArmAnglesForPosition(position);
-        }();
-        std::pair<units::volt_t, units::volt_t> ff = [position, &angles]{
-            return CalculateTwoJointedArmFeedforward(
-                units::radian_t{angles.first},
-                units::radian_t{-angles.second},  // relative elbow angle, negative theta2 (matches motor sign)
-                units::angular_velocity::radians_per_second_t{SubArm::GetInstance().GetShoulderVelocity()},
-                units::angular_velocity::radians_per_second_t{SubArm::GetInstance().GetElbowVelocity()},
-                0_rad_per_s_sq,
-                0_rad_per_s_sq
-            );
-        }();
-        return SubArm::GetInstance().SetShoulderAndElbowPositionTargets(
-        angles.first, -angles.second, ff.first, ff.second);
-        // return SubArm::GetInstance().SetShoulderAndElbowPositionTargets(
-        // angles.first, -angles.second, 0_V, 0_V);
+        // Point-to-point arm command. The IK target is fixed, but the model-based feedforward
+        // is recomputed EVERY scheduler cycle from the arm's live measured velocity AND
+        // acceleration (both joints), and the targets are re-applied with that fresh feedforward.
+        // This lets the M*a inertia (including the off-diagonal M12 coupling between the two
+        // joints), the Coriolis term, gravity, and back-EMF all track the arm as it actually moves.
+        const std::pair<units::degree_t, units::degree_t> angles = GetArmAnglesForPosition(position);
+        const units::degree_t shoulderTarget = angles.first;   // model theta1 (motor coords match)
+        const units::degree_t elbowTarget = -angles.second;    // model theta2 (elbow-up is negative, motor coords match)
+
+        return SubArm::GetInstance().Run([shoulderTarget, elbowTarget] {
+            const std::pair<units::volt_t, units::volt_t> ff = CalculateTwoJointedArmFeedforward(
+                units::radian_t{shoulderTarget},
+                units::radian_t{elbowTarget},
+                units::radians_per_second_t{SubArm::GetInstance().GetShoulderVelocity()},
+                units::radians_per_second_t{SubArm::GetInstance().GetElbowVelocity()},
+                units::radians_per_second_squared_t{SubArm::GetInstance().GetShoulderAcceleration()},
+                units::radians_per_second_squared_t{SubArm::GetInstance().GetElbowAcceleration()});
+
+            // Motor positive direction == model positive angle for BOTH joints: the elbow target
+            // is negated only to convert the IK's positive flexion angle into the model's negative
+            // elbow-up angle. The returned model voltages are applied as-is (no extra sign flip).
+            SubArm::GetInstance().SetShoulderPositionTarget(shoulderTarget, ff.first);
+            SubArm::GetInstance().SetElbowPositionTarget(elbowTarget, ff.second);
+        });
     }
 
     std::pair<units::volt_t, units::volt_t> CalculateTwoJointedArmFeedforward(
@@ -161,75 +165,83 @@ namespace cmd {
         units::radians_per_second_squared_t shoulderAccel,
         units::radians_per_second_squared_t elbowAccel)
     {
-        // --- Physical constants ---
-        constexpr double m1 = SubArm::SHOULDER_LINK_MASS.value();    // kg - shoulder link
-        constexpr double m2 = SubArm::ELBOW_LINK_MASS.value();      // kg - elbow link
-        constexpr double m3 = SubArm::ELBOW_MOTOR_MASS.value();     // kg - elbow motor (mounted at joint)
+        // --- Physical constants (per rafi's "Two Jointed Arm Dynamics" whitepaper) ---
+        constexpr double m1 = SubArm::SHOULDER_LINK_MASS.value();  // kg - shoulder link
+        constexpr double m2 = SubArm::ELBOW_LINK_MASS.value();    // kg - elbow link
+        constexpr double m3 = SubArm::ELBOW_MOTOR_MASS.value();   // kg - elbow motor, modelled as
+                                                                  //      a point mass AT the elbow
+                                                                  //      joint (on link 1)
 
-        // Arm link lengths
-        constexpr double L1 = SubArm::SHOULDER_ARM_LENGTH.value();   // m
-        constexpr double L2 = SubArm::ELBOW_ARM_LENGTH.value();     // m
+        constexpr double l1 = SubArm::SHOULDER_ARM_LENGTH.value();  // m
+        constexpr double l2 = SubArm::ELBOW_ARM_LENGTH.value();     // m
 
-        // Distance from each joint to the center of mass of its link (assume uniform: L/2)
-        constexpr double r1 = L1 / 2.0;
-        constexpr double r2 = L2 / 2.0;
+        // Distance from each joint to the center of mass of its link (uniform rod: L/2).
+        // NOTE: only r1/r2 are COM distances. Every term that levers a mass OUTSIDE the
+        // shoulder joint (link 2, the elbow motor) must use the FULL length l1, not r1.
+        constexpr double r1 = l1 / 2.0;
+        constexpr double r2 = l2 / 2.0;
 
         constexpr double g = 9.81;  // m/s^2
 
         // Moments of inertia about each link's center of mass (uniform rod: I = mL^2/12)
-        constexpr double I1 = m1 * L1 * L1 / 12.0;
-        constexpr double I2 = m2 * L2 * L2 / 12.0;
+        constexpr double I1 = m1 * l1 * l1 / 12.0;
+        constexpr double I2 = m2 * l2 * l2 / 12.0;
 
-        // NEO Vortex motor constants
-        constexpr double kV_actual = 12.0 / (6784.0 * (2.0 * M_PI / 60.0));  // V/(rad/s) on motor shaft
-        constexpr double kt = 1.0 / kV_actual;  // N*m/A (torque constant)
-        constexpr double G = 55.8;        // Gear ratio (shoulder and elbow)
-        constexpr double efficiency = 0.85;  // Gearbox efficiency
+        // Each joint is driven by one NEO Vortex through its own gearbox (same motor model
+        // the sim uses). The ideal-motor voltage law V = (R/Kt)*torque + (1/Kv)*speed
+        // (equivalent to the paper's B and Kb matrices) is provided by frc::DCMotor.
+        static constexpr frc::DCMotor kMotor = frc::DCMotor::NeoVortex();
+        const double kGearShoulder = SubArm::SHOULDER_GEARING;
+        const double kGearElbow = SubArm::ELBOW_GEARING;
 
         // --- Extract angles and velocities ---
-        const double th1 = shoulderAngle.value();      // rad
-        const double th2 = elbowAngle.value();          // rad (relative to shoulder)
+        const double th1 = shoulderAngle.value();      // rad - link 1 angle from horizontal (CCW+)
+        const double th2 = elbowAngle.value();          // rad - RELATIVE angle, link 2 CCW+ from link 1
         const double w1  = shoulderVelocity.value();    // rad/s
         const double w2  = elbowVelocity.value();       // rad/s
         const double a1  = shoulderAccel.value();       // rad/s^2
         const double a2  = elbowAccel.value();          // rad/s^2
 
         // Trig shorthand
-        const double c1 = std::cos(th1);
-        const double c2 = std::cos(th2);
-        const double s2 = std::sin(th2);
+        const double c1  = std::cos(th1);
+        const double c2  = std::cos(th2);
+        const double s2  = std::sin(th2);
+        const double c12 = std::cos(th1 + th2);
 
-        // === Mass (inertia) matrix M ===
-        // M[0][0]: effective inertia at shoulder (all masses contribute)
-        const double M11 = I1 + I2 + m2 * (r1*r1 + r2*r2 + 2.0*r1*r2*c2)
-                         + m3 * (L1*L1 + r2*r2 + 2.0*L1*r2*c2);
-        // M[0][1] = M[1][0]: coupling inertia
-        const double M12 = I2 + m2 * r2 * (r1 * c2 + r2)
-                         + m3 * r2 * (L1 * c2 + r2);
-        // M[1][1]: effective inertia at elbow
-        const double M22 = I2 + m2 * r2 * r2 + m3 * r2 * r2;
+        // === Inertia matrix M (paper, section 3) ===
+        // M11: all masses contribute; link 1 also needs its parallel-axis term m1*r1^2,
+        //      and link 2 / elbow motor lever about the FULL shoulder length l1.
+        const double M11 = m1*r1*r1 + I1                       // shoulder link about base pivot
+                         + m2*(l1*l1 + r2*r2) + I2             // elbow link COM through base pivot
+                         + 2.0*m2*l1*r2*c2                     // distance between the two COMs
+                         + m3 * (l1*l1);                       // elbow motor, point mass at the joint
+        // M12 = M21 (coupling inertia)
+        const double M12 = I2 + m2*(r2*r2 + l1*r2*c2);
+        // M22 (elbow inertia)
+        const double M22 = I2 + m2*r2*r2;
 
-        // === Coriolis / centrifugal matrix C ===
-        const double h = -r1 * r2 * s2 * (m2 + m3);
-        const double C1 = h * (w2 * (2.0 * w1 + w2));
-        const double C2 = h * w1 * w1;
+        // === Coriolis / centrifugal terms h = m2*l1*r2 (paper, section 4) ===
+        const double h = m2 * l1 * r2;
+        const double C1 = -h * s2 * (w2 * (2.0*w1 + w2));   // joint 1 (Coriolis + centrifugal)
+        const double C2 =  h * s2 * (w1 * w1);              // joint 2 (centrifugal)
 
-        // === Gravity vector ===
-        // Positive torque = counterclockwise (opposes downward gravity)
-        const double G1 = (m1*r1 + m2*L1 + m3*L1) * g * c1
-                        + (m2*r2 + m3*r2) * g * std::cos(th1 + th2);
-        const double G2 = (m2*r2 + m3*r2) * g * std::cos(th1 + th2);
+        // === Gravity vector (paper, section 5) + elbow motor mass ===
+        const double tauGravity1 = (m1*r1 + m2*l1 + m3*l1) * g * c1
+                                 + m2*r2 * g * c12;
+        const double tauGravity2 = m2*r2 * g * c12;
 
-        // === Joint torques (N*m at the output shaft) ===
-        const double tau1 = M11 * a1 + M12 * a2 + C1 + G1;
-        const double tau2 = M12 * a1 + M22 * a2 + C2 + G2;
+        // === Joint torques required (N*m at the output shafts) ===
+        const double tau1 = M11*a1 + M12*a2 + C1 + tauGravity1;
+        const double tau2 = M12*a1 + M22*a2 + C2 + tauGravity2;
 
-        // === Convert to motor voltages ===
-        // Motor voltage: V = (tau * G) / (kt * efficiency) + kV * G * omega
-        const double v1 = (tau1 * G) / (kt * efficiency) + kV_actual * G * w1;
-        const double v2 = (tau2 * G) / (kt * efficiency) + kV_actual * G * w2;
+        // === Convert to motor voltages (paper, section 6) ===
+        // Torque at the motor shaft is tau/G; motor shaft speed is G*w.
+        const units::volt_t v1 = kMotor.Voltage(units::newton_meter_t{tau1 / kGearShoulder},
+                                                units::radians_per_second_t{kGearShoulder * w1});
+        const units::volt_t v2 = kMotor.Voltage(units::newton_meter_t{tau2 / kGearElbow},
+                                                units::radians_per_second_t{kGearElbow * w2});
 
-        return {units::volt_t{v1}, units::volt_t{v2}};
+        return {v1, v2};
     }
 
 }

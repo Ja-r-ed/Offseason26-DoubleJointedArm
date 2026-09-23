@@ -17,6 +17,8 @@
 #include <frc/smartdashboard/MechanismLigament2d.h>
 #include <frc/smartdashboard/MechanismRoot2d.h>
 #include <frc/util/Color.h>
+#include <frc/filter/LinearFilter.h>
+#include <units/angular_acceleration.h>
 
 #include "Constants.h"
 #include "rev/config/SparkFlexConfig.h"
@@ -38,8 +40,11 @@ public:
   void Periodic() override;
   void SimulationPeriodic() override;
 
-  // CommandPtrs
-  frc2::CommandPtr SetShoulderAndElbowPositionTargets(units::degree_t shoulderTarget, units::degree_t elbowTarget, units::volt_t shoulderFF, units::volt_t elbowFF);
+  // Apply per-joint position targets with an arbitrary feedforward. These re-issue the
+  // closed-loop reference every time they are called, so a command may call them each
+  // scheduler cycle with a freshly computed (live) feedforward.
+  void SetShoulderPositionTarget(units::degree_t shoulderTarget, units::volt_t shoulderFF);
+  void SetElbowPositionTarget(units::degree_t elbowTarget, units::volt_t elbowFF);
 
   // Getters
   units::degree_t GetShoulderPositionTarget();
@@ -49,6 +54,10 @@ public:
   units::degree_t GetElbowPosition();
   units::degrees_per_second_t GetElbowVelocity();
   units::degree_t GetRelativeElbowPosition();
+  // Measured angular acceleration (low-pass filtered derivative of the encoder velocity,
+  // updated every Periodic()). Same units and sign convention as the velocity getters.
+  units::degrees_per_second_squared_t GetShoulderAcceleration();
+  units::degrees_per_second_squared_t GetElbowAcceleration();
 
   // Bool
   bool ShoulderIsAtTarget();
@@ -60,6 +69,10 @@ public:
   static constexpr units::kilogram_t ELBOW_LINK_MASS = 0.5_kg;
   static constexpr units::kilogram_t ELBOW_MOTOR_MASS = 0.0_kg;
 
+  // Gearbox ratios (used by the two-joint feedforward and the sim models).
+  static constexpr double SHOULDER_GEARING = 55.8;
+  static constexpr double ELBOW_GEARING = 55.8;
+
 private:
   ICSparkFlex _shoulderMotor{canid::SHOULDER};
   rev::spark::SparkFlexConfig _shoulderMotorConfig;
@@ -67,23 +80,36 @@ private:
   ICSparkFlex _elbowMotor{canid::ELBOW};
   rev::spark::SparkFlexConfig _elbowMotorConfig;
 
-  static constexpr double SHOULDER_P = 10.0;
+  static constexpr double SHOULDER_P = 0.1;
   static constexpr double SHOULDER_I = 0.0;
   static constexpr double SHOULDER_D = 0.0;
-  static constexpr double SHOULDER_GEARING = 55.8;
   static constexpr units::degree_t SHOULDER_MAX_ANGLE = 180_deg;
-  static constexpr units::degree_t SHOULDER_MIN_ANGLE = -20_deg;
+  static constexpr units::degree_t SHOULDER_MIN_ANGLE = -40_deg;
   static constexpr units::degree_t SHOULDER_STARTING_ANGLE = 0_deg;
   static constexpr units::degree_t SHOULDER_TOLERANCE = 1_deg;
 
-  static constexpr double ELBOW_P = 10.0;
+  static constexpr double ELBOW_P = 0.1;
   static constexpr double ELBOW_I = 0.0;
   static constexpr double ELBOW_D = 0.0;
-  static constexpr double ELBOW_GEARING = 55.8;
   static constexpr units::degree_t ELBOW_MAX_ANGLE = 180_deg;
   static constexpr units::degree_t ELBOW_MIN_ANGLE = -180_deg;
   static constexpr units::degree_t ELBOW_STARTING_ANGLE = 0_deg;
   static constexpr units::degree_t ELBOW_TOLERANCE = 1_deg;
+
+  // Measured joint accelerations (deg/s^2): single-pole low-pass filtered derivative of the
+  // encoder velocity, computed in Periodic(). The time constant rejects encoder noise while
+  // still capturing real arm dynamics for the model feedforward.
+  static constexpr units::second_t ACCEL_FILTER_TIME_CONSTANT = 0.10_s;
+  frc::LinearFilter<double> _shoulderAccelFilter =
+      frc::LinearFilter<double>::SinglePoleIIR(ACCEL_FILTER_TIME_CONSTANT.value(), 20_ms);
+  frc::LinearFilter<double> _elbowAccelFilter =
+      frc::LinearFilter<double>::SinglePoleIIR(ACCEL_FILTER_TIME_CONSTANT.value(), 20_ms);
+  units::degrees_per_second_t _lastShoulderVelocity{0};
+  units::degrees_per_second_t _lastElbowVelocity{0};
+  bool _shoulderAccelInitialized = false;
+  bool _elbowAccelInitialized = false;
+  units::degrees_per_second_squared_t _shoulderAccel{0};
+  units::degrees_per_second_squared_t _elbowAccel{0};
 
   // Simulation components
   static constexpr units::degree_t SHOULDER_START_ANGLE = 0_deg;
